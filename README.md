@@ -1,12 +1,15 @@
 Google.Auth
 ===========
-A C# Library for using Google Authentication
+A C#/.NET Library for using Google Authentication
 
-Working:
+It should work on Mono, though I haven't tested it there yet.  It does NOT depend on System.Web, so hopefully it works fine on MonoTouch and MonoDroid and all the Xamarin stuff :)
+
+What's Working:
 --------
 - OAuth 3-Legged
 
-Coming Soon:
-------------
+
+What doesn't exist yet:
+-----------------------
 - OAuth 2-Legged
 - AuthSub
