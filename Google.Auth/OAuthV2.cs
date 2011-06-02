@@ -14,10 +14,7 @@ namespace Google.Auth
 		const string OobRedirectUrl = "urn:ietf:wg:oauth:2.0:oob";
 
 		Regex rxJson = new Regex(@"\""(?<key>[a-z0-9_\-/ ]+)\""\s?:\s?(\""(?<val>[a-z0-9_\-/ ]+)\""|(?<val>[0-9]+))", RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase);
-
-		public delegate void UserAuthorizationPromptDelegate(string url);
-		public event UserAuthorizationPromptDelegate OnUserAuthorizationPrompt;
-
+				
 		public OAuthV2(string clientId, string clientSecret, string redirectUrl, params string[] scopes)
 		{
 			this.ClientId = clientId;
@@ -72,7 +69,7 @@ namespace Google.Auth
 			private set;
 		}
 
-		public void Auth()
+		public string GetAuthUrl()
 		{
 			var url = OAuthV2AuthorizeUrl
 				+ string.Format("?client_id={0}&redirect_uri={1}&response_type=code&scope={2}",
@@ -80,26 +77,59 @@ namespace Google.Auth
 				string.IsNullOrEmpty(this.RedirectUrl) ? OobRedirectUrl : Util.UrlEncode(this.RedirectUrl),
 				Util.UrlEncode(string.Join(" ", Scopes)));
 
-			this.OnUserAuthorizationPrompt(url);
+			return url;
 		}
 
-		public bool GetAccessToken(string verifier)
+		public bool TryGetAccessToken(string verificationCode, out GoogleOAuthException error)
+		{
+			error = null;
+			try
+			{
+				GetAccessToken(verificationCode);
+				return true;
+			}
+			catch (GoogleOAuthException ex)
+			{
+				error = ex;
+				return false;
+			}
+		}
+
+		public bool GetAccessToken(string verificationCode)
 		{
 			var p = new NameValueCollection();
 			p.Add("client_id", this.ClientId);
 			p.Add("client_secret", this.ClientSecret);
-			p.Add("code", verifier);
+			p.Add("code", verificationCode);
 			p.Add("redirect_uri", string.IsNullOrEmpty(this.RedirectUrl) ? OobRedirectUrl : this.RedirectUrl);
 			p.Add("grant_type", "authorization_code");
 
 			var url = Util.BuildUrl(OobRedirectUrl, p);
 			var data = Util.DownloadUrl(url);
 
-			parseToken(data);
+			if (!parseToken(data))
+			{
+				var ex = new GoogleOAuthException("Failed to get Access Token.  Check ServerResponse for Details.");
+				ex.ServerResponse = data;
+				throw ex;
+			}
 
-			return !string.IsNullOrEmpty(this.Token)
-				&& !string.IsNullOrEmpty(this.RefreshToken)
-				&& this.Expires > DateTime.MinValue;
+			return true;
+		}
+
+		public bool TryRefreshAccessToken(out GoogleOAuthException error)
+		{
+			error = null;
+			try 
+			{ 
+				RefreshAccessToken();
+				return true;
+			}
+			catch (GoogleOAuthException ex)
+			{
+				error = ex;
+				return false;
+			}
 		}
 
 		public bool RefreshAccessToken()
@@ -114,20 +144,23 @@ namespace Google.Auth
 			var url = Util.BuildUrl(OobRedirectUrl, p);
 			var data = Util.DownloadUrl(url);
 
-			parseToken(data);
+			if (!parseToken(data))
+			{
+				var ex = new GoogleOAuthException("Failed to get Access Token.  Check ServerResponse for Details.");
+				ex.ServerResponse = data;
+				throw ex;
+			}
 
-			return !string.IsNullOrEmpty(this.Token)
-				&& !string.IsNullOrEmpty(this.RefreshToken)
-				&& this.Expires > DateTime.MinValue;
+			return true;
 		}
 		
 
-		void parseToken(string data)
+		bool parseToken(string data)
 		{
 			var matches = rxJson.Matches(data);
 
 			if (matches != null || matches.Count > 0)
-				return;
+				return false;
 
 			foreach (Match m in matches)
 			{
@@ -148,6 +181,10 @@ namespace Google.Auth
 					this.Expires = DateTime.Now.AddSeconds(expiresIn);
 				}
 			}
+
+			return !string.IsNullOrEmpty(this.Token)
+				&& !string.IsNullOrEmpty(this.RefreshToken)
+				&& this.Expires > DateTime.MinValue;
 			
 		}
 	}

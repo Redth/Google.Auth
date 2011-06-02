@@ -70,9 +70,6 @@ namespace Google.Auth
 
 	public class OAuth3Legged
 	{
-		public delegate void UserAuthorizationPromptDelegate(string url);
-		public event UserAuthorizationPromptDelegate OnUserAuthorizationPrompt;
-
 		const string OAuthGetRequestTokenUrl = "https://www.google.com/accounts/OAuthGetRequestToken";
 		const string OAuthAuthorizeTokenUrl = "https://www.google.com/accounts/OAuthAuthorizeToken";
 		const string OAuthGetAccessTokenUrl = "https://www.google.com/accounts/OAuthGetAccessToken";
@@ -86,9 +83,6 @@ namespace Google.Auth
 			string oauthCallbackUrl,
 			params string[] scopes)
 		{
-			this.Step = GoogleOAuth3LeggedStep.GetRequestToken;
-			this.LastError = string.Empty;
-
 			this.Scopes = scopes;
 			this.DisplayName = displayName;
 			this.Mobile = mobile;
@@ -96,19 +90,7 @@ namespace Google.Auth
 			this.ConsumerSecret = string.IsNullOrEmpty(oauthConsumerSecret) ? "anonymous" : oauthConsumerSecret;
 			this.CallbackUrl = string.IsNullOrEmpty(oauthCallbackUrl) ? "oob" : oauthCallbackUrl;
 		}
-
-		public GoogleOAuth3LeggedStep Step
-		{
-			get;
-			private set;
-		}
-
-		public string LastError
-		{
-			get;
-			private set;
-		}
-
+		
 		public string ApplicationName
 		{
 			get;
@@ -184,6 +166,21 @@ namespace Google.Auth
 			return data;
 		}
 
+		public bool TryValidateTokens(string token, string tokenSecret, out GoogleOAuthException error)
+		{
+			error = null;
+
+			try
+			{
+				return ValidateTokens(token, tokenSecret);
+			}
+			catch (GoogleOAuthException ex)
+			{
+				error = ex;
+				return false;
+			}
+		}
+
 		/// <summary>
 		/// Validates the given token and tokenSecret to ensure it is still valid for the given scopes
 		/// </summary>
@@ -194,7 +191,6 @@ namespace Google.Auth
 		{
 			//This is largely unadvertised as a means to validate OAuth Token and token scope.
 			// This is the documented way to get AuthSub info, but it works for OAuth too!
-			this.Step = GoogleOAuth3LeggedStep.ValidateTokens;
 
 			//Important that these parameters are in alpha order
 			var p = new NameValueCollection();
@@ -217,11 +213,8 @@ namespace Google.Auth
 
 			//No lines parsed? had an issue
 			if (lines == null || lines.Length <= 0)
-			{
-				this.LastError = data;
-				return false;
-			}
-
+				throw new GoogleOAuthException("Empty Response from Validation Call");
+			
 			//We want to find all the valid scopes returned 
 			// eg format:  Scope=...\nScope2=... etc.
 			var validScopes = new List<string>();
@@ -250,24 +243,39 @@ namespace Google.Auth
 
 			if (missingScopes.Count() > 0)
 			{
-				this.LastError = "Missing Scopes:" + Environment.NewLine + string.Join(Environment.NewLine, missingScopes);
-				return false;
+				var ex = new GoogleOAuthException("Access Token is not valid for one or more requested scopes");
+				ex.Data.Add("MissingScopes", missingScopes.ToArray());
+				throw ex;
 			}
 
 			if (!secure)
-			{
-				this.LastError = "Not Secured: " + data;
-				return false;
-			}
+				throw new GoogleOAuthException("Validation: Account not Secured");
 
 			return true;
 		}
 
+		public bool TryGetAuthUrl(out string authUrl, out GoogleOAuthException error)
+		{
+			authUrl = string.Empty;
+			error = null;
+			try
+			{
+				authUrl = GetAuthUrl();
+				return true;
+			}
+			catch (GoogleOAuthException ex)
+			{
+				error = ex;
+				return false;
+			}
+		}
+
 		/// <summary>
-		/// Authorizes an account with OAuth for the specified Google scopes
+		/// Authorizes an account with OAuth for the specified Google scopes and gets the URL to display to the user for further authorization.
+		/// You should call GetAccessToken() next with the verification code returned after the user Grants your application access.
 		/// </summary>
-		/// <returns>True if Authorization Succeeded, with the Token and TokenSecret properties populated</returns>
-		public bool Auth()
+		/// <returns>Returns the Authorization URL to display for the user.</returns>
+		public string GetAuthUrl()
 		{
 			//Step 1: Get Request Token
 			// IMPORTANT NOTE: For the GenerateSignature to work properly all the parameters in this
@@ -295,15 +303,12 @@ namespace Google.Auth
 			this.TokenSecret = responseParameters["oauth_token_secret"] ?? "";
 
 			//If the tokens aren't there, we had an issue
-			if (string.IsNullOrEmpty(this.Token)
-				|| string.IsNullOrEmpty(this.TokenSecret))
+			if (string.IsNullOrEmpty(this.Token) || string.IsNullOrEmpty(this.TokenSecret))
 			{
-				this.LastError = data;
-				return false;
+				var ex = new GoogleOAuthException("Missing Token or TokenSecret in response.  Check ServerResponse.");
+				ex.ServerResponse = data;
+				throw ex;
 			}
-
-			//Step 2: Authorize the Token
-			this.Step = GoogleOAuth3LeggedStep.AuthorizeToken;
 
 			//Build the url to show the user
 			url = string.Format("{0}?oauth_token={1}", OAuthAuthorizeTokenUrl, this.Token);
@@ -312,22 +317,28 @@ namespace Google.Auth
 			if (Mobile)
 				url += "&btmpl=mobile";
 
-			if (this.OnUserAuthorizationPrompt != null)
-				this.OnUserAuthorizationPrompt(url);
-
-			return true;
+			return url;
 		}
 
-		public bool GetAccessToken(string verifier)
+		public bool TryGetAccessToken(string verificationCode, out GoogleOAuthException error)
 		{
-			if (string.IsNullOrEmpty(verifier))
+			error = null;
+
+			try
 			{
-				this.LastError = "Missing Verifier!";
+				return GetAccessToken(verificationCode);
+			}
+			catch (GoogleOAuthException ex)
+			{
+				error = ex;
 				return false;
 			}
+		}
 
-			//Step 3: Get Access Token
-			this.Step = GoogleOAuth3LeggedStep.GetAccessToken;
+		public bool GetAccessToken(string verificationCode)
+		{
+			if (string.IsNullOrEmpty(verificationCode))
+				throw new GoogleOAuthException("Missing Verification Code!");
 
 			//Again make sure these are in alpha order
 			var p = new NameValueCollection();
@@ -336,7 +347,7 @@ namespace Google.Auth
 			p.Add("oauth_signature_method", "HMAC-SHA1");
 			p.Add("oauth_timestamp", Util.EpochNow().ToString());
 			p.Add("oauth_token", this.Token);
-			p.Add("oauth_verifier", verifier);
+			p.Add("oauth_verifier", verificationCode);
 			p.Add("oauth_version", "1.0");
 
 			//Generating the signature, this time we have a TokenSecret we must include
@@ -354,8 +365,9 @@ namespace Google.Auth
 			//If we have no tokens, we had an issue
 			if (string.IsNullOrEmpty(this.Token) || string.IsNullOrEmpty(this.TokenSecret))
 			{
-				this.LastError = data;
-				return false;
+				var ex = new GoogleOAuthException("Missing Token or TokenSecret in response.  Check ServerResponse.");
+				ex.ServerResponse = data;
+				throw ex;
 			}
 
 			//Everything went ok!

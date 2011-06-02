@@ -36,12 +36,15 @@ namespace Google.Auth.Examples.OAuth3Legged
 				"https://mail.google.com/", // Scopes, this one is for Gmail
 				"https://www.googleapis.com/auth/userinfo#email"
 			);
-
-			//Watch for when we need to navigate the user to login and grant access
-			goauth.OnUserAuthorizationPrompt += new Auth.OAuth3Legged.UserAuthorizationPromptDelegate(goauth_OnUserAuthorizationPrompt);
+						
+			GoogleOAuthException err = null;
+			string authUrl = string.Empty;
 
 			//Start the process
-			goauth.Auth();
+			if (goauth.TryGetAuthUrl(out authUrl, out err))
+				this.webBrowser.Navigate(authUrl);
+			else
+				MessageBox.Show(this, "OAuth Failed: " + err.ServerResponse, "Failed", MessageBoxButtons.OK);	
 		}
 
 		void webBrowser_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
@@ -57,8 +60,10 @@ namespace Google.Auth.Examples.OAuth3Legged
 
 				if (match != null && match.Groups["ov"] != null)
 				{
+					GoogleOAuthException err = null;
+
 					//NEXT Step: Get Access Token with the verifier
-					if (goauth.GetAccessToken(match.Groups["ov"].Value))
+					if (goauth.TryGetAccessToken(match.Groups["ov"].Value, out err))
 					{
 						var data = goauth.DownloadStringAuthenticated("https://www.googleapis.com/userinfo/email");
 						var email = "Unknown Email!";
@@ -69,7 +74,7 @@ namespace Google.Auth.Examples.OAuth3Legged
 						MessageBox.Show(this, "Email of Authenticated User: " + email, "Success!", MessageBoxButtons.OK);
 					}
 					else
-						MessageBox.Show(this, "OAuth Failed: " + goauth.LastError, "Failed", MessageBoxButtons.OK);	
+						MessageBox.Show(this, "OAuth Failed: " + err.ServerResponse, "Failed", MessageBoxButtons.OK);	
 				}
 			}
 		}
