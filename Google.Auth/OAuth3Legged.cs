@@ -163,6 +163,27 @@ namespace Google.Auth
 			private set;
 		}
 
+		public string DownloadStringAuthenticated(string url)
+		{
+			var p = new NameValueCollection();
+
+			p.Add("oauth_consumer_key", this.ConsumerKey);
+			p.Add("oauth_nonce", Util.RandomInt64().ToString());
+			p.Add("oauth_signature_method", "HMAC-SHA1");
+			p.Add("oauth_timestamp", Util.EpochNow().ToString());
+			p.Add("oauth_token", this.Token);
+			p.Add("oauth_version", "1.0");
+
+			//Build the signature
+			p.Add("oauth_signature", GenerateSignature(url, p, this.ConsumerSecret, this.TokenSecret));
+
+			//Get a response
+			var fetchUrl = Util.BuildUrl(url, p);
+			var data = Util.DownloadUrl(fetchUrl);
+
+			return data;
+		}
+
 		/// <summary>
 		/// Validates the given token and tokenSecret to ensure it is still valid for the given scopes
 		/// </summary>
@@ -178,9 +199,9 @@ namespace Google.Auth
 			//Important that these parameters are in alpha order
 			var p = new NameValueCollection();
 			p.Add("oauth_consumer_key", this.ConsumerKey);
-			p.Add("oauth_nonce", RandomInt64().ToString());
+			p.Add("oauth_nonce", Util.RandomInt64().ToString());
 			p.Add("oauth_signature_method", "HMAC-SHA1");
-			p.Add("oauth_timestamp", EpochNow().ToString());
+			p.Add("oauth_timestamp", Util.EpochNow().ToString());
 			p.Add("oauth_token", token);
 			p.Add("oauth_version", "1.0");
 
@@ -188,8 +209,8 @@ namespace Google.Auth
 			p.Add("oauth_signature", GenerateSignature(OAuthVerifyTokensUrl, p, this.ConsumerSecret, tokenSecret));
 
 			//Get a response
-			var url = BuildUrl(OAuthVerifyTokensUrl, p);
-			var data = DownloadUrl(url);
+			var url = Util.BuildUrl(OAuthVerifyTokensUrl, p);
+			var data = Util.DownloadUrl(url);
 
 			//The respone from google comes in lines
 			var lines = data.Split('\n');
@@ -254,9 +275,9 @@ namespace Google.Auth
 			var p = new NameValueCollection();
 			p.Add("oauth_callback", this.CallbackUrl);
 			p.Add("oauth_consumer_key", this.ConsumerKey);
-			p.Add("oauth_nonce", RandomInt64().ToString());
+			p.Add("oauth_nonce", Util.RandomInt64().ToString());
 			p.Add("oauth_signature_method", "HMAC-SHA1");
-			p.Add("oauth_timestamp", EpochNow().ToString());
+			p.Add("oauth_timestamp", Util.EpochNow().ToString());
 			p.Add("oauth_version", "1.0");
 			p.Add("scope", string.Join(" ", Scopes));
 			p.Add("xoauth_displayname", DisplayName);
@@ -265,9 +286,9 @@ namespace Google.Auth
 			p.Add("oauth_signature", GenerateSignature(OAuthGetRequestTokenUrl, p, this.ConsumerSecret, null));
 
 			//Build the url and download the data
-			var url = BuildUrl(OAuthGetRequestTokenUrl, p);
-			var data = DownloadUrl(url);
-			var responseParameters = ParseQueryString(data);
+			var url = Util.BuildUrl(OAuthGetRequestTokenUrl, p);
+			var data = Util.DownloadUrl(url);
+			var responseParameters = Util.ParseQueryString(data);
 
 			//Parse out the tokens in the response
 			this.Token = responseParameters["oauth_token"] ?? "";
@@ -305,16 +326,15 @@ namespace Google.Auth
 				return false;
 			}
 
-
 			//Step 3: Get Access Token
 			this.Step = GoogleOAuth3LeggedStep.GetAccessToken;
 
 			//Again make sure these are in alpha order
 			var p = new NameValueCollection();
 			p.Add("oauth_consumer_key", this.ConsumerKey);
-			p.Add("oauth_nonce", RandomInt64().ToString());
+			p.Add("oauth_nonce", Util.RandomInt64().ToString());
 			p.Add("oauth_signature_method", "HMAC-SHA1");
-			p.Add("oauth_timestamp", EpochNow().ToString());
+			p.Add("oauth_timestamp", Util.EpochNow().ToString());
 			p.Add("oauth_token", this.Token);
 			p.Add("oauth_verifier", verifier);
 			p.Add("oauth_version", "1.0");
@@ -323,9 +343,9 @@ namespace Google.Auth
 			p.Add("oauth_signature", GenerateSignature(OAuthGetAccessTokenUrl, p, this.ConsumerSecret, this.TokenSecret));
 
 			//Get the response
-			var url = BuildUrl(OAuthGetAccessTokenUrl, p);
-			var data = DownloadUrl(url);
-			var responseParameters = ParseQueryString(data);
+			var url = Util.BuildUrl(OAuthGetAccessTokenUrl, p);
+			var data = Util.DownloadUrl(url);
+			var responseParameters = Util.ParseQueryString(data);
 
 			//Parse out the tokens in the response
 			this.Token = responseParameters["oauth_token"] ?? "";
@@ -342,130 +362,24 @@ namespace Google.Auth
 			return true;
 		}
 
-		string DownloadUrl(string url)
-		{
-			var wc = new WebClient();
-			var data = string.Empty;
-
-			try { data = wc.DownloadString(url); }
-			catch (WebException wex)
-			{
-				try
-				{
-					using (var sr = new System.IO.StreamReader(wex.Response.GetResponseStream()))
-					{
-						data = sr.ReadToEnd();
-					}
-				}
-				catch { }
-			}
-			return data;
-		}
-
-		string BuildUrl(string baseUrl, NameValueCollection param)
-		{
-			var url = new StringBuilder();
-
-			url.Append(baseUrl);
-			url.Append("?");
-
-			foreach (var key in param.AllKeys)
-				url.AppendFormat("{0}={1}&", key, UrlEncode(param[key]));
-
-			if (url.Length > 1)
-				url.Remove(url.Length - 1, 1);
-
-			return url.ToString();
-		}
-
 		string GenerateSignature(string baseUrl, NameValueCollection param, string consumerSecret, string tokenSecret)
 		{
 			var pStr = new StringBuilder();
 
 			foreach (var key in param.AllKeys)
-				pStr.AppendFormat("{0}={1}&", key, UrlEncode(param[key]));
+				pStr.AppendFormat("{0}={1}&", key, Util.UrlEncode(param[key]));
 
 			if (pStr.Length > 1) //Remove trailing &
 				pStr.Remove(pStr.Length - 1, 1);
 
 			var baseStr = string.Format("GET&{0}&{1}",
-				UrlEncode(baseUrl),
-				UrlEncode(pStr.ToString()));
+				Util.UrlEncode(baseUrl),
+				Util.UrlEncode(pStr.ToString()));
 
 			HMACSHA1 sha1 = new HMACSHA1();
-			sha1.Key = Encoding.ASCII.GetBytes(UrlEncode(consumerSecret) + "&" + (string.IsNullOrEmpty(tokenSecret) ? "" : UrlEncode(tokenSecret)));
+			sha1.Key = Encoding.ASCII.GetBytes(Util.UrlEncode(consumerSecret) + "&" + (string.IsNullOrEmpty(tokenSecret) ? "" : Util.UrlEncode(tokenSecret)));
 
 			return Convert.ToBase64String(sha1.ComputeHash(System.Text.Encoding.ASCII.GetBytes(baseStr)));
-		}
-
-		public string UrlEncode(string Input)
-		{
-			StringBuilder Result = new StringBuilder();
-			for (int x = 0; x < Input.Length; ++x)
-			{
-				if ("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~"
-					.IndexOf(Input[x]) != -1)
-					Result.Append(Input[x]);
-				else
-					Result.Append("%").Append(String.Format("{0:X2}", (int)Input[x]));
-			}
-			return Result.ToString();
-		}
-
-		public string UrlDecode(string data)
-		{
-			var result = data;
-			var rxUrl = new Regex("%[A-Z0-9]{2}", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-			var matches = rxUrl.Matches(data);
-
-			foreach (Match m in matches)
-			{
-				var hex = m.Value.TrimStart('%');
-
-				if (m.Success)
-					result = result.Replace(m.Value, new string((char)int.Parse(hex, System.Globalization.NumberStyles.HexNumber), 1));
-			}
-
-			return result;
-		}
-
-		ulong RandomInt64()
-		{
-			var rnd = new Random();
-			var buffer = new byte[sizeof(ulong)];
-			rnd.NextBytes(buffer);
-			return BitConverter.ToUInt64(buffer, 0);
-		}
-
-		ulong EpochNow()
-		{
-			var epoch = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
-
-			return (ulong)(DateTime.UtcNow - epoch).TotalSeconds;
-		}
-
-		NameValueCollection ParseQueryString(string data)
-		{
-			var results = new NameValueCollection();
-
-			if (data.Contains('?'))
-				data = data.Substring(data.IndexOf('?') + 1);
-
-			var fields = data.Split('&');
-
-			if (fields == null)
-				return results;
-
-			foreach (var field in fields)
-			{
-				var parts = field.Split(new char[] { '=' }, 2);
-
-				if (parts != null && parts.Length >= 1)
-					results.Add(parts[0], parts.Length == 2 ? UrlDecode(parts[1]) : "");
-			}
-
-			return results;
 		}
 	}
 }

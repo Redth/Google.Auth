@@ -33,7 +33,8 @@ namespace Google.Auth.Examples.OAuth3Legged
 				null, //oauth consumer key		null == "anonymous" <- for unregistered apps
 				null, //oauth consumer secret	null == "anonymous" <- for unregistered apps
 				null, //callback url			null == "oob"  <- google's own page for callback
-				"https://mail.google.com/" // Scopes, this one is for Gmail
+				"https://mail.google.com/", // Scopes, this one is for Gmail
+				"https://www.googleapis.com/auth/userinfo#email"
 			);
 
 			//Watch for when we need to navigate the user to login and grant access
