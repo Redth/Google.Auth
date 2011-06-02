@@ -70,7 +70,7 @@ namespace Google.Auth
 
 	public class OAuth3Legged
 	{
-		public delegate void UserAuthorizationPromptDelegate(string url);
+		public delegate string UserAuthorizationPromptDelegate(string url);
 		public event UserAuthorizationPromptDelegate OnUserAuthorizationPrompt;
 
 		const string OAuthGetRequestTokenUrl = "https://www.google.com/accounts/OAuthGetRequestToken";
@@ -175,7 +175,7 @@ namespace Google.Auth
 			p.Add("oauth_version", "1.0");
 
 			//Build the signature
-			p.Add("oauth_signature", GenerateSignature(url, p, this.ConsumerSecret, this.TokenSecret));
+			p.Add("oauth_signature", Util.GenerateSignature(url, p, this.ConsumerSecret, this.TokenSecret));
 
 			var header = Util.BuildOAuthHeader(p);
 						
@@ -206,7 +206,7 @@ namespace Google.Auth
 			p.Add("oauth_version", "1.0");
 
 			//Build the signature
-			p.Add("oauth_signature", GenerateSignature(OAuthVerifyTokensUrl, p, this.ConsumerSecret, tokenSecret));
+			p.Add("oauth_signature", Util.GenerateSignature(OAuthVerifyTokensUrl, p, this.ConsumerSecret, tokenSecret));
 
 			//Get a response
 			var url = Util.BuildUrl(OAuthVerifyTokensUrl, p);
@@ -283,7 +283,7 @@ namespace Google.Auth
 			p.Add("xoauth_displayname", DisplayName);
 
 			//Add the last paramaeter which uses the existing ones to generate a signature
-			p.Add("oauth_signature", GenerateSignature(OAuthGetRequestTokenUrl, p, this.ConsumerSecret, null));
+			p.Add("oauth_signature", Util.GenerateSignature(OAuthGetRequestTokenUrl, p, this.ConsumerSecret, null));
 
 			//Build the url and download the data
 			var url = Util.BuildUrl(OAuthGetRequestTokenUrl, p);
@@ -340,7 +340,7 @@ namespace Google.Auth
 			p.Add("oauth_version", "1.0");
 
 			//Generating the signature, this time we have a TokenSecret we must include
-			p.Add("oauth_signature", GenerateSignature(OAuthGetAccessTokenUrl, p, this.ConsumerSecret, this.TokenSecret));
+			p.Add("oauth_signature", Util.GenerateSignature(OAuthGetAccessTokenUrl, p, this.ConsumerSecret, this.TokenSecret));
 
 			//Get the response
 			var url = Util.BuildUrl(OAuthGetAccessTokenUrl, p);
@@ -360,26 +360,6 @@ namespace Google.Auth
 
 			//Everything went ok!
 			return true;
-		}
-
-		string GenerateSignature(string baseUrl, NameValueCollection param, string consumerSecret, string tokenSecret)
-		{
-			var pStr = new StringBuilder();
-
-			foreach (var key in param.AllKeys)
-				pStr.AppendFormat("{0}={1}&", key, Util.UrlEncode(param[key]));
-
-			if (pStr.Length > 1) //Remove trailing &
-				pStr.Remove(pStr.Length - 1, 1);
-
-			var baseStr = string.Format("GET&{0}&{1}",
-				Util.UrlEncode(baseUrl),
-				Util.UrlEncode(pStr.ToString()));
-
-			HMACSHA1 sha1 = new HMACSHA1();
-			sha1.Key = Encoding.ASCII.GetBytes(Util.UrlEncode(consumerSecret) + "&" + (string.IsNullOrEmpty(tokenSecret) ? "" : Util.UrlEncode(tokenSecret)));
-
-			return Convert.ToBase64String(sha1.ComputeHash(System.Text.Encoding.ASCII.GetBytes(baseStr)));
 		}
 	}
 }

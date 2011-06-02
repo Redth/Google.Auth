@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Google.Auth
 {
-	class Util
+	public class Util
 	{
 		public static string DownloadUrl(string url)
 		{
@@ -98,6 +99,26 @@ namespace Google.Auth
 			}
 
 			return result;
+		}
+
+		public static string GenerateSignature(string baseUrl, NameValueCollection param, string consumerSecret, string tokenSecret)
+		{
+			var pStr = new StringBuilder();
+
+			foreach (var key in param.AllKeys)
+				pStr.AppendFormat("{0}={1}&", key, Util.UrlEncode(param[key]));
+
+			if (pStr.Length > 1) //Remove trailing &
+				pStr.Remove(pStr.Length - 1, 1);
+
+			var baseStr = string.Format("GET&{0}&{1}",
+				Util.UrlEncode(baseUrl),
+				Util.UrlEncode(pStr.ToString()));
+
+			HMACSHA1 sha1 = new HMACSHA1();
+			sha1.Key = Encoding.ASCII.GetBytes(Util.UrlEncode(consumerSecret) + "&" + (string.IsNullOrEmpty(tokenSecret) ? "" : Util.UrlEncode(tokenSecret)));
+
+			return Convert.ToBase64String(sha1.ComputeHash(System.Text.Encoding.ASCII.GetBytes(baseStr)));
 		}
 
 		public static ulong RandomInt64()
