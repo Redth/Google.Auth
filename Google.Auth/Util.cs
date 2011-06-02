@@ -12,7 +12,17 @@ namespace Google.Auth
 	{
 		public static string DownloadUrl(string url)
 		{
+			return DownloadUrl(url, null);
+		}
+
+		public static string DownloadUrl(string url, params string[] headers)
+		{
 			var wc = new WebClient();
+			
+			if (headers != null)
+				foreach (var h in headers)
+					wc.Headers.Add(h);
+
 			var data = string.Empty;
 
 			try { data = wc.DownloadString(url); }
@@ -28,6 +38,18 @@ namespace Google.Auth
 				catch { }
 			}
 			return data;
+		}
+
+		public static string BuildOAuthHeader(NameValueCollection p)
+		{
+			var header = new StringBuilder();
+			header.Append("Authorization: OAuth ");
+
+			foreach (var key in p.AllKeys)
+				header.AppendFormat("{0}=\"{1}\", ",
+					key, UrlEncode(p[key]));
+
+			return header.ToString();
 		}
 
 		public static string BuildUrl(string baseUrl, NameValueCollection param)

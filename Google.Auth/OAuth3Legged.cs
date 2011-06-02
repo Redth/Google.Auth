@@ -177,9 +177,9 @@ namespace Google.Auth
 			//Build the signature
 			p.Add("oauth_signature", GenerateSignature(url, p, this.ConsumerSecret, this.TokenSecret));
 
-			//Get a response
-			var fetchUrl = Util.BuildUrl(url, p);
-			var data = Util.DownloadUrl(fetchUrl);
+			var header = Util.BuildOAuthHeader(p);
+						
+			var data = Util.DownloadUrl(url, header);
 
 			return data;
 		}

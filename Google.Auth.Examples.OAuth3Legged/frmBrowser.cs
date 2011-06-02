@@ -59,9 +59,17 @@ namespace Google.Auth.Examples.OAuth3Legged
 				{
 					//NEXT Step: Get Access Token with the verifier
 					if (goauth.GetAccessToken(match.Groups["ov"].Value))
-						MessageBox.Show(this, "Token: " + goauth.Token + "\r\nToken Secret: " + goauth.TokenSecret, "Success!", MessageBoxButtons.OK);
+					{
+						var data = goauth.DownloadStringAuthenticated("https://www.googleapis.com/userinfo/email");
+						var email = "Unknown Email!";
+
+						if (data.StartsWith("email=", StringComparison.InvariantCultureIgnoreCase) && data.Contains('&'))
+							email = data.Substring(6, data.IndexOf('&') - 6);
+
+						MessageBox.Show(this, "Email of Authenticated User: " + email, "Success!", MessageBoxButtons.OK);
+					}
 					else
-						MessageBox.Show(this, "OAuth Failed: " + goauth.LastError, "Failed", MessageBoxButtons.OK);
+						MessageBox.Show(this, "OAuth Failed: " + goauth.LastError, "Failed", MessageBoxButtons.OK);	
 				}
 			}
 		}
