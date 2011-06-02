@@ -70,7 +70,7 @@ namespace Google.Auth
 
 	public class OAuth3Legged
 	{
-		public delegate string UserAuthorizationPromptDelegate(string url);
+		public delegate void UserAuthorizationPromptDelegate(string url);
 		public event UserAuthorizationPromptDelegate OnUserAuthorizationPrompt;
 
 		const string OAuthGetRequestTokenUrl = "https://www.google.com/accounts/OAuthGetRequestToken";

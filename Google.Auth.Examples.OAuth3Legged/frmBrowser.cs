@@ -76,7 +76,6 @@ namespace Google.Auth.Examples.OAuth3Legged
 
 		void goauth_OnUserAuthorizationPrompt(string url)
 		{
-			//Show the user the url so they can login and/or grant access
 			this.webBrowser.Navigate(url);
 		}
 	}
